@@ -1,0 +1,540 @@
+Practical 1 - Vacuum Cleaner World
+def vacuum_agent(location, status):
+    if status == "Dirty":
+        return "Suck"
+    elif location == "A":
+        return "Move Right"
+    else:
+        return "Move Left"
+
+
+# Environment
+rooms = {"A": "Dirty", "B": "Dirty"}
+location = "A"
+
+for step in range(6):
+    status = rooms[location]
+    action = vacuum_agent(location, status)
+
+    print("Location:", location, "| Status:", status,
+          "| Action:", action)
+
+    if action == "Suck":
+        rooms[location] = "Clean"
+    elif action == "Move Right":
+        location = "B"
+    else:
+        location = "A"
+
+print("Final room status:", rooms)
+
+
+ Practical 2 - A* Search for 8-Puzzle
+import heapq
+
+start = (1, 2, 3,
+         4, 0, 6,
+         7, 5, 8)
+
+goal = (1, 2, 3,
+        4, 5, 6,
+        7, 8, 0)
+
+
+def heuristic(state):
+    distance = 0
+
+    for i, tile in enumerate(state):
+        if tile != 0:
+            goal_index = goal.index(tile)
+            distance += abs(i // 3 - goal_index // 3)
+            distance += abs(i % 3 - goal_index % 3)
+
+    return distance
+
+
+def get_neighbors(state):
+    zero = state.index(0)
+    row, col = zero // 3, zero % 3
+    neighbors = []
+
+    for dr, dc in [(1, 0), (-1, 0),
+                   (0, 1), (0, -1)]:
+        nr, nc = row + dr, col + dc
+
+        if 0 <= nr < 3 and 0 <= nc < 3:
+            new_pos = nr * 3 + nc
+            board = list(state)
+            board[zero], board[new_pos] = (
+                board[new_pos], board[zero]
+            )
+            neighbors.append(tuple(board))
+
+    return neighbors
+
+
+def a_star(start):
+    pq = [(heuristic(start), 0, start)]
+    parent = {start: None}
+    cost = {start: 0}
+
+    while pq:
+        _, g, current = heapq.heappop(pq)
+
+        if g != cost[current]:
+            continue
+
+        if current == goal:
+            path = []
+            while current is not None:
+                path.append(current)
+                current = parent[current]
+            return path[::-1]
+
+        for nxt in get_neighbors(current):
+            new_cost = g + 1
+
+            if new_cost < cost.get(nxt, float("inf")):
+                cost[nxt] = new_cost
+                parent[nxt] = current
+                f = new_cost + heuristic(nxt)
+                heapq.heappush(pq, (f, new_cost, nxt))
+
+    return None
+
+
+path = a_star(start)
+
+if path:
+    print("Solution found in", len(path) - 1, "moves")
+    for state in path:
+        for i in range(0, 9, 3):
+            print(state[i:i + 3])
+        print()
+else:
+    print("No solution found")
+
+
+
+ Practical 3 - Tower of Hanoi using BFS State Space Search
+from collections import deque
+
+
+def hanoi_bfs(n):
+    # State records the peg of each disk,
+    # from smallest disk to largest disk.
+    start = tuple([0] * n)  # Peg A
+    goal = tuple([2] * n)   # Peg C
+
+    queue = deque([start])
+    parent = {start: None}
+    pegs = ["A", "B", "C"]
+
+    while queue:
+        state = queue.popleft()
+
+        if state == goal:
+            break
+
+        # Find the top disk on each peg.
+        top = {}
+        for disk, peg in enumerate(state):
+            if peg not in top:
+                top[peg] = disk
+
+        # Try every legal move.
+        for source in range(3):
+            if source not in top:
+                continue
+
+            disk = top[source]
+
+            for dest in range(3):
+                if dest == source:
+                    continue
+
+                # A disk can move onto an empty peg
+                # or onto a larger top disk.
+                if dest in top and top[dest] < disk:
+                    continue
+
+                new_state = list(state)
+                new_state[disk] = dest
+                new_state = tuple(new_state)
+
+                if new_state not in parent:
+                    parent[new_state] = (state, disk, source, dest)
+                    queue.append(new_state)
+
+    # Reconstruct the solution.
+    moves = []
+    state = goal
+
+    while parent[state] is not None:
+        previous, disk, source, dest = parent[state]
+        moves.append((disk + 1, pegs[source], pegs[dest]))
+        state = previous
+
+    moves.reverse()
+
+    for disk, source, dest in moves:
+        print(f"Move disk {disk} from {source} to {dest}")
+
+    print("Total moves:", len(moves))
+
+
+hanoi_bfs(3)
+
+
+
+ Practical 4 - Local Beam Search for TSP
+import random
+
+random.seed(10)
+
+cities = ["A", "B", "C", "D", "E"]
+
+distance = [
+    [0, 10, 15, 20, 12],
+    [10, 0, 35, 25, 17],
+    [15, 35, 0, 30, 28],
+    [20, 25, 30, 0, 16],
+    [12, 17, 28, 16, 0]
+]
+
+
+def route_cost(route):
+    total = 0
+
+    for i in range(len(route)):
+        total += distance[route[i]][
+            route[(i + 1) % len(route)]
+        ]
+
+    return total
+
+
+def neighbors(route):
+    result = []
+
+    # Keep city 0 (A) fixed as the starting city.
+    for i in range(1, len(route)):
+        for j in range(i + 1, len(route)):
+            new_route = route[:]
+            new_route[i], new_route[j] = (
+                new_route[j], new_route[i]
+            )
+            result.append(new_route)
+
+    return result
+
+
+def local_beam_search(k=3, iterations=100):
+    beam = []
+
+    # Generate k initial routes.
+    while len(beam) < k:
+        route = [0] + random.sample([1, 2, 3, 4], 4)
+
+        if route not in beam:
+            beam.append(route)
+
+    best = min(beam, key=route_cost)
+
+    for _ in range(iterations):
+        candidates = []
+
+        for route in beam:
+            candidates.extend(neighbors(route))
+
+        # Remove duplicate routes.
+        unique = {tuple(route): route for route in candidates}
+        candidates = list(unique.values())
+
+        candidates.sort(key=route_cost)
+        beam = candidates[:k]
+
+        if route_cost(beam[0]) < route_cost(best):
+            best = beam[0][:]
+
+    names = [cities[i] for i in best]
+    names.append(names[0])
+
+    print("Best route:", " -> ".join(names))
+    print("Total distance:", route_cost(best))
+
+
+local_beam_search()
+
+
+
+ Practical 5 - BFS for 8-Puzzle Planning
+from collections import deque
+
+
+def get_neighbors(state):
+    neighbors = []
+    zero = state.index(0)
+    row, col = zero // 3, zero % 3
+
+    # Down, up, right, left
+    moves = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+
+    for dr, dc in moves:
+        r, c = row + dr, col + dc
+
+        if 0 <= r < 3 and 0 <= c < 3:
+            new_pos = r * 3 + c
+            board = list(state)
+            board[zero], board[new_pos] = (
+                board[new_pos], board[zero]
+            )
+            neighbors.append(tuple(board))
+
+    return neighbors
+
+
+def is_solvable(start, goal):
+    # For a 3x3 puzzle, inversion parity must match.
+    goal_order = {
+        tile: i for i, tile in enumerate(goal) if tile != 0
+    }
+    sequence = [goal_order[tile] for tile in start if tile != 0]
+
+    inversions = sum(
+        sequence[i] > sequence[j]
+        for i in range(len(sequence))
+        for j in range(i + 1, len(sequence))
+    )
+
+    return inversions % 2 == 0
+
+
+def bfs(start, goal):
+    queue = deque([start])
+    parent = {start: None}
+
+    while queue:
+        current = queue.popleft()
+
+        if current == goal:
+            path = []
+            while current is not None:
+                path.append(current)
+                current = parent[current]
+            return path[::-1]
+
+        for neighbor in get_neighbors(current):
+            if neighbor not in parent:
+                parent[neighbor] = current
+                queue.append(neighbor)
+
+    return None
+
+
+def print_board(state):
+    for i in range(0, 9, 3):
+        print(*("_" if x == 0 else x for x in state[i:i + 3]))
+    print()
+
+
+def read_state(message):
+    while True:
+        try:
+            values = list(map(int, input(message).split()))
+
+            if len(values) == 9 and set(values) == set(range(9)):
+                return tuple(values)
+
+            print("Enter numbers 0 to 8 exactly once.")
+
+        except ValueError:
+            print("Enter valid integers separated by spaces.")
+
+
+print("Enter the puzzle row by row. Use 0 for blank.")
+start = read_state("Initial state: ")
+goal = read_state("Goal state: ")
+
+if not is_solvable(start, goal):
+    print("This initial state cannot reach the given goal state.")
+else:
+    path = bfs(start, goal)
+
+    if path:
+        print("\nSolution found!")
+        print("Minimum moves:", len(path) - 1)
+
+        for step, state in enumerate(path):
+            print("Step", step)
+            print_board(state)
+    else:
+        print("No solution found.")
+
+
+
+ Practical 6 - DFS for Water Jug Problem
+def get_neighbors(state):
+    a, b = state
+    neighbors = []
+
+    # Fill either jug
+    neighbors.append(((4, b), "Fill Jug A"))
+    neighbors.append(((a, 3), "Fill Jug B"))
+
+    # Empty either jug
+    neighbors.append(((0, b), "Empty Jug A"))
+    neighbors.append(((a, 0), "Empty Jug B"))
+
+    # Pour Jug A into Jug B
+    pour = min(a, 3 - b)
+    neighbors.append(
+        ((a - pour, b + pour), "Pour A into B")
+    )
+
+    # Pour Jug B into Jug A
+    pour = min(b, 4 - a)
+    neighbors.append(
+        ((a + pour, b - pour), "Pour B into A")
+    )
+
+    # Remove actions that do not change the state
+    return [
+        (new_state, action)
+        for new_state, action in neighbors
+        if new_state != state
+    ]
+
+
+def dfs():
+    start = (0, 0)
+    target = 2
+
+    stack = [(start, [])]
+    visited = {start}
+
+    while stack:
+        state, path = stack.pop()
+        a, b = state
+
+        if a == target:
+            print("Solution found!")
+            print("Initial state: (0, 0)")
+
+            for action, new_state in path:
+                print(action, "->", new_state)
+
+            print("Goal state:", state)
+            return
+
+        for new_state, action in get_neighbors(state):
+            if new_state not in visited:
+                visited.add(new_state)
+                stack.append(
+                    (new_state, path + [(action, new_state)])
+                )
+
+    print("No solution found.")
+
+
+dfs()
+
+
+
+ Practical 7 - Backtracking for 8-Queens
+N = 8
+board = [-1] * N
+
+
+def is_safe(row, col):
+    for prev_row in range(row):
+        prev_col = board[prev_row]
+
+        # Check column and diagonals
+        if prev_col == col:
+            return False
+
+        if abs(prev_col - col) == abs(prev_row - row):
+            return False
+
+    return True
+
+
+def solve(row):
+    # All 8 queens have been placed
+    if row == N:
+        return True
+
+    # Try every column in the current row
+    for col in range(N):
+        if is_safe(row, col):
+            board[row] = col
+
+            if solve(row + 1):
+                return True
+
+            # Backtrack: remove the queen
+            board[row] = -1
+
+    return False
+
+
+if solve(0):
+    print("Solution found:")
+    for row in range(N):
+        for col in range(N):
+            if board[row] == col:
+                print("Q", end=" ")
+            else:
+                print(".", end=" ")
+        print()
+else:
+    print("No solution exists.")
+
+
+
+ Practical 8 - Rule-Based Chatbot
+import re
+
+
+def chatbot(user_input):
+    text = user_input.lower().strip()
+
+    if re.search(r"\b(hi|hello|hey)\b", text):
+        return "Hello! How can I help you?"
+
+    elif re.search(r"\b(name)\b", text):
+        return "I am a simple rule-based chatbot."
+
+    elif re.search(r"\bhow are you\b", text):
+        return "I am fine, thank you! How are you?"
+
+    elif re.search(r"\b(your age|how old are you)\b", text):
+        return "I am a computer program, so I don't have an age."
+
+    elif re.search(r"\bwhat is ai\b|\bdefine ai\b", text):
+        return "AI is the ability of machines to perform tasks that usually require human intelligence."
+
+    elif re.search(r"\b(help)\b", text):
+        return "You can greet me, ask my name, or ask what AI means."
+
+    elif re.search(r"\b(thank you|thanks)\b", text):
+        return "You're welcome!"
+
+    elif re.search(r"\b(bye|goodbye|exit|quit)\b", text):
+        return "Goodbye! Have a nice day."
+
+    else:
+        return "Sorry, I don't understand that. Please try another question."
+
+
+print("Chatbot: Hello! Type 'bye' to exit.")
+
+while True:
+    user = input("You: ")
+    response = chatbot(user)
+    print("Chatbot:", response)
+
+    if re.search(r"\b(bye|goodbye|exit|quit)\b", user.lower()):
+        break
+Copying tip: For best indentation, copy directly from the code section in this document. If copying from a PDF, avoid selecting across page breaks or headers.
